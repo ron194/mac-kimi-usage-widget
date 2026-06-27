@@ -1,0 +1,32 @@
+# Rust build artifacts
+/target/
+
+# Cargo.lock handling:
+# - For applications/binaries: keep Cargo.lock in version control.
+# - For libraries: ignore Cargo.lock.
+# This project is an application, so Cargo.lock is committed.
+# Cargo.lock
+
+# Backup files created by some editors
+**/*.rs.bk
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE / editor directories
+.idea/
+.vscode/
+*.iml
+
+# Environment / secrets
+.env
+.env.local
+
+# Debug symbols
+*.dSYM/
+*.pdb
