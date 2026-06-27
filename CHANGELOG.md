@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-27
+
 ### Added
 
 - macOS `.app` bundle packaging so the app runs as a menu-bar-only app without a keep-alive terminal.
@@ -27,5 +29,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - macOS menu-bar UI with refresh, API-key prompt, open-console, and quit actions.
 - Config file and environment-variable support for API key, base URL, and daily budget.
 
-[Unreleased]: https://github.com/rontam/kimi-usage-widget/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/rontam/kimi-usage-widget/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/rontam/kimi-usage-widget/releases/tag/v0.2.0
 [0.1.0]: https://github.com/rontam/kimi-usage-widget/releases/tag/v0.1.0
