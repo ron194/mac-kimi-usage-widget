@@ -1,6 +1,9 @@
 # Rust build artifacts
 /target/
 
+# Packaged app bundles and disk images
+/dist/
+
 # Cargo.lock handling:
 # - For applications/binaries: keep Cargo.lock in version control.
 # - For libraries: ignore Cargo.lock.

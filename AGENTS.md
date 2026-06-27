@@ -28,16 +28,16 @@ cargo build --release
 # Run tests
 cargo test
 
-# Run the app
+# Run the raw binary (useful during development)
 cargo run --release
 # or after building:
 ./target/release/kimi-usage-widget
 
-# Run in the background
-./target/release/kimi-usage-widget &
+# Build a distributable macOS .app bundle and DMG
+./scripts/build-macos-app.sh
 ```
 
-The release binary is the intended artifact; there is no app-bundle, installer, or automated deployment pipeline in this repository.
+The release artifact is a signed `.app` bundle packaged as a DMG; the raw binary is still available under `target/release/kimi-usage-widget` for development.
 
 ## Technology Stack and Architecture
 
@@ -62,6 +62,8 @@ The release binary is the intended artifact; there is no app-bundle, installer, 
 - `src/prompt.rs` — Native macOS dialog for entering the API key via `osascript`. Non-macOS builds return an error.
 - `src/usage.rs` — Discovers local `wire.jsonl` logs under `~/.kimi-code`, parses `usage.record` events, and aggregates token counts by day.
 - `assets/icon.png` — Embedded menu-bar icon, loaded at compile time with `include_bytes!`.
+- `packaging/macos/Info.plist` — macOS app-bundle metadata (`LSUIElement`, bundle identifier, version, etc.).
+- `scripts/build-macos-app.sh` — Builds the release binary, produces `Kimi Usage Widget.app`, and packages it into a DMG.
 
 ### Runtime behavior
 
@@ -123,5 +125,9 @@ When adding new functionality, prefer adding unit tests that do not depend on th
 
 ## Deployment Notes
 
-- The project produces a single executable binary. There is no app bundle, `Info.plist`, code-signing, notarization, or installer configuration in the repository.
-- To distribute, build with `cargo build --release` and distribute `target/release/kimi-usage-widget` appropriately for macOS.
+- The release workflow (`.github/workflows/release.yml`) builds the app on `macos-latest`, runs `./scripts/build-macos-app.sh`, and uploads the resulting DMG to a GitHub Release when a `v*.*.*` tag is pushed.
+- The script produces:
+  - `dist/Kimi Usage Widget.app` — ad-hoc signed macOS app bundle with `LSUIElement` set so it runs as a menu-bar-only app.
+  - `dist/Kimi-Usage-Widget-X.Y.Z.dmg` — compressed disk image for distribution.
+- The app is signed ad-hoc (`codesign --sign -`) so it can be launched from the DMG, but it is **not** notarized. Users on macOS 10.15+ may need to right-click the app and choose **Open** the first time they run it.
+- To ship a fully Gatekeeper-compliant build, configure a paid Apple Developer account and update the workflow to import a Developer ID certificate and submit the app to Apple Notary Service.

@@ -20,6 +20,20 @@ A lightweight macOS menu-bar app written in Rust that displays Kimi Code usage.
 - Auto-refreshes every 60 seconds
 - Lightweight native implementation (no webview)
 
+## Install
+
+Pre-built macOS app bundles are attached to [GitHub Releases](https://github.com/rontam/kimi-usage-widget/releases).
+
+1. Download the latest `Kimi-Usage-Widget-X.Y.Z.dmg`.
+2. Open the DMG and drag **Kimi Usage Widget** into **Applications**.
+3. Launch the app from Launchpad or Finder.
+
+> Because the release is signed ad-hoc, macOS Gatekeeper may show a warning the first time you open it. Right-click the app and choose **Open** to allow it.
+
+> Release DMGs are built for Apple Silicon (arm64). For an Intel (x86_64) build, run `./scripts/build-macos-app.sh` on an Intel Mac or build from source.
+
+Once launched, the app runs in the menu bar with no terminal window required.
+
 ## Setup
 
 Create an API key in the [Kimi Code Console](https://www.kimi.com/code/console), then configure the app.
@@ -62,26 +76,35 @@ The environment variable overrides the config file.
 
 ## Requirements
 
-- macOS
-- Rust 1.85 or later
+- macOS 11 (Big Sur) or later
+- Rust 1.85 or later (only for building from source)
 - Kimi Code API key (for live quota)
 
-## Build
+## Build from source
 
 ```bash
 cargo build --release
 ```
 
+To build a distributable `.app` bundle and DMG locally:
+
+```bash
+./scripts/build-macos-app.sh
+```
+
+This produces:
+
+- `dist/Kimi Usage Widget.app`
+- `dist/Kimi-Usage-Widget-X.Y.Z.dmg`
+
 ## Run
+
+After installing the app bundle, double-click **Kimi Usage Widget** in **Applications**. It runs as a menu-bar-only app with no terminal window.
+
+For local development you can also run the raw binary:
 
 ```bash
 ./target/release/kimi-usage-widget
-```
-
-To keep it running in the background:
-
-```bash
-./target/release/kimi-usage-widget &
 ```
 
 ## Test
@@ -97,6 +120,8 @@ cargo test
 - `src/config.rs` — config file and environment handling
 - `src/usage.rs` — usage log discovery and aggregation
 - `assets/icon.png` — menu-bar icon
+- `packaging/macos/Info.plist` — macOS app bundle metadata
+- `scripts/build-macos-app.sh` — local app-bundle and DMG builder
 
 ## Contributing
 
