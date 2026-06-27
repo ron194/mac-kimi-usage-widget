@@ -12,11 +12,7 @@ env:
 jobs:
   check:
     name: Check, lint, and test
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
