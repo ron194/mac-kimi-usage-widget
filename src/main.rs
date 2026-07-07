@@ -1,6 +1,7 @@
 mod api;
 mod config;
 mod prompt;
+mod report;
 mod usage;
 
 use std::cell::RefCell;
@@ -28,6 +29,7 @@ struct MenuIds {
     refresh: tray_icon::menu::MenuId,
     settings: tray_icon::menu::MenuId,
     console: tray_icon::menu::MenuId,
+    report: tray_icon::menu::MenuId,
     quit: tray_icon::menu::MenuId,
     menu: Menu,
 }
@@ -164,18 +166,21 @@ fn build_menu(
     let refresh = MenuItem::new("Refresh", true, None);
     let settings = MenuItem::new("Set API Key...", true, None);
     let console = MenuItem::new("Open Console...", true, None);
+    let report = MenuItem::new("Open Usage Report...", true, None);
     let quit = MenuItem::new("Quit", true, None);
 
     menu.append(&PredefinedMenuItem::separator()).unwrap();
     menu.append(&refresh).unwrap();
     menu.append(&settings).unwrap();
     menu.append(&console).unwrap();
+    menu.append(&report).unwrap();
     menu.append(&quit).unwrap();
 
     MenuIds {
         refresh: refresh.id().clone(),
         settings: settings.id().clone(),
         console: console.id().clone(),
+        report: report.id().clone(),
         quit: quit.id().clone(),
         menu,
     }
@@ -188,6 +193,7 @@ struct UiState {
     refresh_id: tray_icon::menu::MenuId,
     settings_id: tray_icon::menu::MenuId,
     console_id: tray_icon::menu::MenuId,
+    report_id: tray_icon::menu::MenuId,
     quit_id: tray_icon::menu::MenuId,
 }
 
@@ -224,6 +230,7 @@ fn update_ui(tray_icon: &TrayIcon, base_dir: &std::path::Path, config: &config::
         refresh_id: ids.refresh,
         settings_id: ids.settings,
         console_id: ids.console,
+        report_id: ids.report,
         quit_id: ids.quit,
     };
 
@@ -303,6 +310,7 @@ fn main() {
             let is_refresh = id == st.refresh_id;
             let is_settings = id == st.settings_id;
             let is_console = id == st.console_id;
+            let is_report = id == st.report_id;
             let is_quit = id == st.quit_id;
             drop(st);
 
@@ -329,6 +337,10 @@ fn main() {
                 }
             } else if is_console {
                 if let Err(e) = open_kimi_console() {
+                    tray_icon.set_title(Some(format!("Kimi: {e}")));
+                }
+            } else if is_report {
+                if let Err(e) = report::open_usage_report(&base_dir) {
                     tray_icon.set_title(Some(format!("Kimi: {e}")));
                 }
             } else if is_quit {
