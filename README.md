@@ -123,6 +123,12 @@ cargo test
 - `packaging/macos/Info.plist` — macOS app bundle metadata
 - `scripts/build-macos-app.sh` — local app-bundle and DMG builder
 
+## Security notes
+
+GitHub Dependabot may flag a vulnerability in `glib 0.18.5` ([RUSTSEC-2024-0429](https://rustsec.org/advisories/RUSTSEC-2024-0429)). This crate is pulled in transitively through `tao` and `tray-icon` for their **Linux/GTK** code paths. The macOS release does not compile or execute the affected `glib::VariantStrIter` code, so the app is not exposed to this issue at runtime.
+
+Clearing the alert requires `tao`/`tray-icon` to migrate from `gtk3-rs` to a newer stack that depends on `glib >= 0.20.0`. That is an upstream change and cannot be fixed by this project alone.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code style, and pull-request guidelines.
