@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use serde::Deserialize;
+use serde_json::Value;
 
 const USAGES_URL: &str = "https://api.kimi.com/coding/v1/usages";
 
@@ -84,6 +85,83 @@ fn parse_u64_str(s: &str) -> u64 {
     s.parse().unwrap_or(0)
 }
 
+fn value_to_u64(value: &Value) -> Option<u64> {
+    match value {
+        Value::Number(n) => n.as_u64().or_else(|| n.as_f64().map(|f| f as u64)),
+        Value::String(s) => s.parse().ok(),
+        _ => None,
+    }
+}
+
+fn value_to_string(value: &Value) -> Option<String> {
+    match value {
+        Value::String(s) => Some(s.clone()),
+        Value::Number(n) => Some(n.to_string()),
+        _ => None,
+    }
+}
+
+/// Extract quota statistics from a loosely-typed API response.
+///
+/// The live API has returned fields as either strings or numbers at different
+/// times, so this parser accepts both and falls back to zero for missing
+/// fields rather than failing the whole request.
+fn quota_from_value(data: &Value) -> QuotaStats {
+    let usage = data.get("usage");
+
+    let weekly_used = usage
+        .and_then(|u| u.get("used"))
+        .and_then(value_to_u64)
+        .unwrap_or(0);
+    let weekly_limit = usage
+        .and_then(|u| u.get("limit"))
+        .and_then(value_to_u64)
+        .unwrap_or(0);
+    let weekly_remaining = usage
+        .and_then(|u| u.get("remaining"))
+        .and_then(value_to_u64)
+        .unwrap_or(0);
+    let reset_time = usage
+        .and_then(|u| u.get("reset_time"))
+        .and_then(value_to_string);
+
+    let mut window_used = 0;
+    let mut window_limit = 0;
+    let mut window_remaining = 0;
+    let mut window_duration_minutes = 0;
+
+    if let Some(Value::Array(limits)) = data.get("limits") {
+        if let Some(first) = limits.first() {
+            if let Some(detail) = first.get("detail") {
+                window_used = detail.get("used").and_then(value_to_u64).unwrap_or(0);
+                window_limit = detail.get("limit").and_then(value_to_u64).unwrap_or(0);
+                window_remaining = detail.get("remaining").and_then(value_to_u64).unwrap_or(0);
+            }
+            if let Some(window) = first.get("window") {
+                window_duration_minutes =
+                    window.get("duration").and_then(value_to_u64).unwrap_or(0);
+            }
+        }
+    }
+
+    let parallel_limit = data
+        .get("parallel")
+        .and_then(|p| p.get("limit"))
+        .and_then(value_to_u64);
+
+    QuotaStats {
+        weekly_used,
+        weekly_limit,
+        weekly_remaining,
+        window_used,
+        window_limit,
+        window_remaining,
+        window_duration_minutes,
+        reset_time,
+        parallel_limit,
+    }
+}
+
 pub fn fetch_quota(api_key: &str) -> Result<QuotaStats, Box<dyn std::error::Error>> {
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
@@ -104,35 +182,113 @@ pub fn fetch_quota(api_key: &str) -> Result<QuotaStats, Box<dyn std::error::Erro
         .into());
     }
 
-    let data: UsagesResponse = response.json()?;
+    let body = response.text()?;
+    crate::log::write_payload("API response", &body);
 
-    let weekly_used = parse_u64_str(&data.usage.used);
-    let weekly_limit = parse_u64_str(&data.usage.limit);
-    let weekly_remaining = parse_u64_str(&data.usage.remaining);
+    let data: Value = serde_json::from_str(&body).map_err(|e| {
+        crate::log::write(&format!(
+            "Failed to parse API response as JSON: {e}. Body length: {}",
+            body.len()
+        ));
+        format!("error decoding response body for url ({}): {e}", USAGES_URL)
+    })?;
 
-    let mut window_used = 0;
-    let mut window_limit = 0;
-    let mut window_remaining = 0;
-    let mut window_duration_minutes = 0;
+    let quota = quota_from_value(&data);
+    crate::log::write(&format!(
+        "Parsed quota: used={} limit={} remaining={} window_duration={}m",
+        quota.weekly_used,
+        quota.weekly_limit,
+        quota.weekly_remaining,
+        quota.window_duration_minutes
+    ));
 
-    if let Some(first) = data.limits.first() {
-        window_used = parse_u64_str(&first.detail.used);
-        window_limit = parse_u64_str(&first.detail.limit);
-        window_remaining = parse_u64_str(&first.detail.remaining);
-        window_duration_minutes = first.window.duration;
+    Ok(quota)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_string_quota_values() {
+        let json = serde_json::json!({
+            "usage": {
+                "limit": "1000",
+                "used": "480",
+                "remaining": "520",
+                "reset_time": "2026-07-14T00:00:00Z"
+            },
+            "limits": [
+                {
+                    "window": { "duration": 60 },
+                    "detail": {
+                        "limit": "100",
+                        "used": "30",
+                        "remaining": "70"
+                    }
+                }
+            ],
+            "parallel": { "limit": "10" }
+        });
+
+        let quota = quota_from_value(&json);
+        assert_eq!(quota.weekly_used, 480);
+        assert_eq!(quota.weekly_limit, 1000);
+        assert_eq!(quota.weekly_remaining, 520);
+        assert_eq!(quota.reset_time, Some("2026-07-14T00:00:00Z".to_string()));
+        assert_eq!(quota.window_used, 30);
+        assert_eq!(quota.window_limit, 100);
+        assert_eq!(quota.window_remaining, 70);
+        assert_eq!(quota.window_duration_minutes, 60);
+        assert_eq!(quota.parallel_limit, Some(10));
+        assert_eq!(quota.weekly_percentage(), 48);
     }
 
-    let parallel_limit = data.parallel.as_ref().map(|p| parse_u64_str(&p.limit));
+    #[test]
+    fn parses_numeric_quota_values() {
+        let json = serde_json::json!({
+            "usage": {
+                "limit": 1000,
+                "used": 480,
+                "remaining": 520
+            },
+            "limits": [
+                {
+                    "window": { "duration": 60 },
+                    "detail": {
+                        "limit": 100,
+                        "used": 30,
+                        "remaining": 70
+                    }
+                }
+            ]
+        });
 
-    Ok(QuotaStats {
-        weekly_used,
-        weekly_limit,
-        weekly_remaining,
-        window_used,
-        window_limit,
-        window_remaining,
-        window_duration_minutes,
-        reset_time: data.usage.reset_time.clone(),
-        parallel_limit,
-    })
+        let quota = quota_from_value(&json);
+        assert_eq!(quota.weekly_used, 480);
+        assert_eq!(quota.weekly_limit, 1000);
+        assert_eq!(quota.weekly_remaining, 520);
+        assert_eq!(quota.window_used, 30);
+        assert_eq!(quota.window_limit, 100);
+        assert_eq!(quota.window_remaining, 70);
+        assert_eq!(quota.window_duration_minutes, 60);
+        assert_eq!(quota.parallel_limit, None);
+    }
+
+    #[test]
+    fn handles_partial_response() {
+        let json = serde_json::json!({
+            "usage": {
+                "limit": "1000",
+                "used": "480"
+            }
+        });
+
+        let quota = quota_from_value(&json);
+        assert_eq!(quota.weekly_used, 480);
+        assert_eq!(quota.weekly_limit, 1000);
+        assert_eq!(quota.weekly_remaining, 0);
+        assert_eq!(quota.window_duration_minutes, 0);
+        assert_eq!(quota.weekly_percentage(), 48);
+    }
 }

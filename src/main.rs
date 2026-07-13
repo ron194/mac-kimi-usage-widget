@@ -1,5 +1,6 @@
 mod api;
 mod config;
+mod log;
 mod prompt;
 mod report;
 mod usage;
